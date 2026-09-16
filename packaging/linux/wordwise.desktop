@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Wordwise
+Comment=Learn the most frequent English words, one card at a time
+Exec=wordwise
+Icon=wordwise
+Terminal=false
+Categories=Education;
+Keywords=english;vocabulary;flashcard;

@@ -1,0 +1,12 @@
+Package: wordwise
+Version: 0.1.0
+Section: education
+Priority: optional
+Architecture: amd64
+Maintainer: Reza Ziaei <rezaziaei28@gmail.com>
+Description: flashcard app for learning the most frequent English words
+ Wordwise is a flashcard app for people who want to learn English.
+ It shows the ~40,000 most frequent English words, one card at a
+ time, from most common to least common.
+Homepage: https://github.com/rezaziaei28/wordwise
+Depends: libgtk-3-0, libblkid1, liblzma5
