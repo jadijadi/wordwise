@@ -50,39 +50,36 @@ class WordDetailScreen extends ConsumerWidget {
           bottom: false,
           child: ListView(
             children: [
-              Padding(padding: const EdgeInsets.fromLTRB(20, 16, 20, 4), child: card),
-              CupertinoListSection.insetGrouped(
-                children: [
-                  CupertinoListTile.notched(
-                    leading: const Icon(CupertinoIcons.flag),
-                    title: Text(_status(progress)),
-                    subtitle: dueLine == null ? null : Text(dueLine),
-                  ),
-                ],
-              ),
+              Padding(padding: const EdgeInsets.fromLTRB(16, 16, 16, 18), child: card),
+              CupertinoGroup(children: [
+                CupertinoRow(
+                  icon: CupertinoIcons.flag,
+                  title: _status(progress),
+                  subtitle: dueLine,
+                ),
+              ]),
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 20),
+                padding: const EdgeInsets.fromLTRB(16, 18, 16, 0),
                 child: SizedBox(
                   width: double.infinity,
-                  child: CupertinoButton.filled(
-                    onPressed: toggle,
-                    child: Text(toggleLabel),
-                  ),
+                  child: CupertinoButton.filled(onPressed: toggle, child: Text(toggleLabel)),
                 ),
               ),
-              if (history.isNotEmpty)
-                CupertinoListSection.insetGrouped(
-                  header: const Text('History'),
-                  children: [
-                    for (final h in history)
-                      CupertinoListTile.notched(
-                        leading: Icon(_cupertinoGradeIcon(h.grade)),
-                        title: Text(h.grade.replaceAll('_', ' ')),
-                        additionalInfo: Text(_fmt(h.at)),
+              if (history.isNotEmpty) ...[
+                const CupertinoGroupHeader('History'),
+                CupertinoGroup(children: [
+                  for (final h in history)
+                    CupertinoRow(
+                      icon: _cupertinoGradeIcon(h.grade),
+                      title: h.grade.replaceAll('_', ' '),
+                      trailing: Text(
+                        _fmt(h.at),
+                        style: TextStyle(fontSize: 15, color: CupertinoColors.secondaryLabel.resolveFrom(context)),
                       ),
-                  ],
-                ),
-              const SizedBox(height: 24),
+                    ),
+                ]),
+              ],
+              const SizedBox(height: 32),
             ],
           ),
         ),

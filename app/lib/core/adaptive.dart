@@ -207,3 +207,172 @@ class _CupertinoToastState extends State<_CupertinoToast> with SingleTickerProvi
     );
   }
 }
+
+// ── iOS settings primitives ────────────────────────────────────────────────
+// Built by hand rather than with CupertinoListTile, which forces single-line
+// subtitles and cannot give a slider its own row.
+
+const kCupertinoInset = EdgeInsets.symmetric(horizontal: 16);
+const kCupertinoRowPadding = EdgeInsets.symmetric(horizontal: 16, vertical: 11);
+
+/// A small, uppercase, grey group header — the iOS Settings style.
+class CupertinoGroupHeader extends StatelessWidget {
+  const CupertinoGroupHeader(this.text, {super.key});
+  final String text;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(32, 22, 32, 7),
+      child: Text(
+        text.toUpperCase(),
+        style: TextStyle(
+          fontSize: 13,
+          letterSpacing: -0.08,
+          color: CupertinoColors.secondaryLabel.resolveFrom(context),
+        ),
+      ),
+    );
+  }
+}
+
+/// An inset-grouped card with hairline separators between its rows.
+class CupertinoGroup extends StatelessWidget {
+  const CupertinoGroup({super.key, required this.children});
+  final List<Widget> children;
+
+  @override
+  Widget build(BuildContext context) {
+    final separator = CupertinoColors.separator.resolveFrom(context);
+    return Padding(
+      padding: kCupertinoInset,
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: ColoredBox(
+          color: CupertinoColors.secondarySystemGroupedBackground.resolveFrom(context),
+          child: Column(
+            children: [
+              for (var i = 0; i < children.length; i++) ...[
+                children[i],
+                // Separators start after the text inset, as in iOS.
+                if (i != children.length - 1)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 16),
+                    child: Container(height: 0.5, color: separator),
+                  ),
+              ],
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// A standard row: optional icon, 17pt regular title, wrapping subtitle,
+/// and either a trailing control or a chevron.
+class CupertinoRow extends StatelessWidget {
+  const CupertinoRow({
+    super.key,
+    this.icon,
+    required this.title,
+    this.subtitle,
+    this.trailing,
+    this.chevron = false,
+    this.onTap,
+  });
+
+  final IconData? icon;
+  final String title;
+  final String? subtitle;
+  final Widget? trailing;
+  final bool chevron;
+  final VoidCallback? onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final label = CupertinoColors.label.resolveFrom(context);
+    final secondary = CupertinoColors.secondaryLabel.resolveFrom(context);
+
+    final row = Padding(
+      padding: kCupertinoRowPadding,
+      child: Row(
+        children: [
+          if (icon != null) ...[
+            Icon(icon, size: 22, color: CupertinoTheme.of(context).primaryColor),
+            const SizedBox(width: 12),
+          ],
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(fontSize: 17, color: label)),
+                if (subtitle != null)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 2),
+                    child: Text(subtitle!, style: TextStyle(fontSize: 13, color: secondary)),
+                  ),
+              ],
+            ),
+          ),
+          if (trailing != null) ...[const SizedBox(width: 12), trailing!],
+          if (chevron)
+            Padding(
+              padding: const EdgeInsets.only(left: 6),
+              child: Icon(CupertinoIcons.chevron_forward, size: 16, color: CupertinoColors.tertiaryLabel.resolveFrom(context)),
+            ),
+        ],
+      ),
+    );
+
+    if (onTap == null) return row;
+    return GestureDetector(behavior: HitTestBehavior.opaque, onTap: onTap, child: row);
+  }
+}
+
+/// A slider row: label (and value) on one line, the slider full-width below.
+class CupertinoSliderRow extends StatelessWidget {
+  const CupertinoSliderRow({
+    super.key,
+    required this.label,
+    this.valueLabel,
+    required this.value,
+    required this.min,
+    required this.max,
+    this.divisions,
+    required this.onChanged,
+    this.trailing,
+  });
+
+  final String label;
+  final String? valueLabel;
+  final double value;
+  final double min;
+  final double max;
+  final int? divisions;
+  final ValueChanged<double> onChanged;
+  final Widget? trailing;
+
+  @override
+  Widget build(BuildContext context) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Expanded(
+                child: Text(label, style: TextStyle(fontSize: 17, color: CupertinoColors.label.resolveFrom(context))),
+              ),
+              if (valueLabel != null)
+                Text(valueLabel!, style: TextStyle(fontSize: 17, color: CupertinoColors.secondaryLabel.resolveFrom(context))),
+              ?trailing,
+            ],
+          ),
+          CupertinoSlider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged),
+        ],
+      ),
+    );
+  }
+}

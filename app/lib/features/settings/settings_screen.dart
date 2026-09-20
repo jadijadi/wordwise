@@ -171,96 +171,96 @@ class _CupertinoSettings extends StatelessWidget {
       child: SafeArea(
         bottom: false,
         child: ListView(
+          padding: const EdgeInsets.only(top: 8, bottom: 32),
           children: [
-            CupertinoListSection.insetGrouped(
-              header: const Text('Reviewing'),
-              children: [
-                CupertinoListTile.notched(
-                  title: const Text('New words per day'),
-                  additionalInfo: Text('${settings.newPerDay}'),
-                  subtitle: CupertinoSlider(
-                    value: settings.newPerDay.toDouble(),
-                    min: 10,
-                    max: 200,
-                    divisions: 19,
-                    onChanged: (v) => notifier.setNewPerDay(v.round()),
-                  ),
+            const CupertinoGroupHeader('Reviewing'),
+            CupertinoGroup(children: [
+              // A slider gets its own full-width row on iOS, with the value in
+              // the label line above it.
+              CupertinoSliderRow(
+                label: 'New words per day',
+                valueLabel: '${settings.newPerDay}',
+                value: settings.newPerDay.toDouble(),
+                min: 10,
+                max: 200,
+                divisions: 19,
+                onChanged: (v) => notifier.setNewPerDay(v.round()),
+              ),
+              CupertinoRow(
+                title: 'Show IPA transcription',
+                trailing: CupertinoSwitch(value: settings.showIpa, onChanged: notifier.setShowIpa),
+              ),
+              CupertinoRow(
+                title: 'Skip ahead on streaks',
+                subtitle: '10 known in a row jumps over the next 100+ words; they return once you start missing words',
+                trailing: CupertinoSwitch(value: settings.skipAhead, onChanged: notifier.setSkipAhead),
+              ),
+              CupertinoSliderRow(
+                label: 'Speech rate',
+                value: settings.ttsRate,
+                min: 0.25,
+                max: 0.7,
+                onChanged: notifier.setTtsRate,
+                trailing: CupertinoButton(
+                  padding: EdgeInsets.zero,
+                  minimumSize: const Size(0, 0),
+                  onPressed: onSpeakSample,
+                  child: const Icon(CupertinoIcons.speaker_2_fill, size: 20),
                 ),
-                CupertinoListTile.notched(
-                  title: const Text('Show IPA transcription'),
-                  trailing: CupertinoSwitch(value: settings.showIpa, onChanged: notifier.setShowIpa),
-                ),
-                CupertinoListTile.notched(
-                  title: const Text('Skip ahead on streaks'),
-                  subtitle: const Text('10 known in a row jumps over the next 100+ words; they return once you start missing words'),
-                  trailing: CupertinoSwitch(value: settings.skipAhead, onChanged: notifier.setSkipAhead),
-                ),
-                CupertinoListTile.notched(
-                  title: const Text('Speech rate'),
-                  subtitle: CupertinoSlider(value: settings.ttsRate, min: 0.25, max: 0.7, onChanged: notifier.setTtsRate),
-                  trailing: CupertinoButton(
-                    padding: EdgeInsets.zero,
-                    minimumSize: const Size(0, 0),
-                    onPressed: onSpeakSample,
-                    child: const Icon(CupertinoIcons.speaker_2_fill, size: 22),
-                  ),
-                ),
-              ],
-            ),
-            CupertinoListSection.insetGrouped(
-              header: const Text('Appearance'),
-              children: [
-                CupertinoListTile.notched(
-                  title: const Text('Theme'),
-                  trailing: CupertinoSlidingSegmentedControl<ThemeMode>(
+              ),
+            ]),
+            const CupertinoGroupHeader('Appearance'),
+            CupertinoGroup(children: [
+              CupertinoRow(
+                title: 'Theme',
+                trailing: SizedBox(
+                  width: 190,
+                  child: CupertinoSlidingSegmentedControl<ThemeMode>(
                     groupValue: settings.themeMode,
                     onValueChanged: (m) => m == null ? null : notifier.setThemeMode(m),
                     children: const {
-                      ThemeMode.system: Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('Auto')),
-                      ThemeMode.light: Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('Light')),
-                      ThemeMode.dark: Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('Dark')),
+                      ThemeMode.system: Text('Auto', style: TextStyle(fontSize: 13)),
+                      ThemeMode.light: Text('Light', style: TextStyle(fontSize: 13)),
+                      ThemeMode.dark: Text('Dark', style: TextStyle(fontSize: 13)),
                     },
                   ),
                 ),
-              ],
-            ),
-            CupertinoListSection.insetGrouped(
-              header: const Text('Progress'),
-              children: [
-                CupertinoListTile.notched(
-                  leading: const Icon(CupertinoIcons.square_arrow_up),
-                  title: const Text('Export progress'),
-                  subtitle: const Text('JSON file via the share sheet'),
-                  trailing: const CupertinoListTileChevron(),
-                  onTap: onExport,
+              ),
+            ]),
+            const CupertinoGroupHeader('Progress'),
+            CupertinoGroup(children: [
+              CupertinoRow(
+                icon: CupertinoIcons.square_arrow_up,
+                title: 'Export progress',
+                subtitle: 'JSON file via the share sheet',
+                chevron: true,
+                onTap: onExport,
+              ),
+              CupertinoRow(
+                icon: CupertinoIcons.square_arrow_down,
+                title: 'Import progress',
+                subtitle: 'Merges by word; newest wins',
+                chevron: true,
+                onTap: onImport,
+              ),
+              if (onUndoCalibration != null)
+                CupertinoRow(
+                  icon: CupertinoIcons.arrow_uturn_left,
+                  title: 'Undo calibration',
+                  subtitle: undoSubtitle,
+                  chevron: true,
+                  onTap: onUndoCalibration,
                 ),
-                CupertinoListTile.notched(
-                  leading: const Icon(CupertinoIcons.square_arrow_down),
-                  title: const Text('Import progress'),
-                  subtitle: const Text('Merges by word; newest wins'),
-                  trailing: const CupertinoListTileChevron(),
-                  onTap: onImport,
-                ),
-                if (onUndoCalibration != null)
-                  CupertinoListTile.notched(
-                    leading: const Icon(CupertinoIcons.arrow_uturn_left),
-                    title: const Text('Undo calibration'),
-                    subtitle: Text(undoSubtitle!),
-                    onTap: onUndoCalibration,
-                  ),
-              ],
-            ),
-            CupertinoListSection.insetGrouped(
-              children: [
-                CupertinoListTile.notched(
-                  leading: const Icon(CupertinoIcons.info_circle),
-                  title: const Text('About & licenses'),
-                  trailing: const CupertinoListTileChevron(),
-                  onTap: () => context.push('/settings/about'),
-                ),
-              ],
-            ),
-            const SizedBox(height: 24),
+            ]),
+            const SizedBox(height: 22),
+            CupertinoGroup(children: [
+              CupertinoRow(
+                icon: CupertinoIcons.info_circle,
+                title: 'About & licenses',
+                chevron: true,
+                onTap: () => context.push('/settings/about'),
+              ),
+            ]),
           ],
         ),
       ),
