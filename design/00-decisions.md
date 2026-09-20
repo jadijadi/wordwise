@@ -144,3 +144,45 @@ Short architecture-decision records. Newest at the bottom.
   derive from it. The `Grade` enum values (`know`, `issues`, `unknown`) and
   everything persisted in `review_log.grade` are unchanged — this is copy,
   not a model change, so no migration.
+
+## D-013 · Adaptive UI: Cupertino on iOS, Material on Android
+
+- **Context:** The app was Material 3 on both platforms — one
+  `MaterialApp.router`, a four-line `ThemeData` and `Icons.*` throughout.
+  On iOS it launched looking like an Android app: a Material `AppBar` with
+  four crammed icon buttons, `FilledButton.tonal` grades, `SwitchListTile` /
+  `Slider` / `DropdownButton` settings rows, floating `SnackBar` toasts and
+  Material push transitions with no interactive back-swipe.
+- **Decision:** Fork the UI by platform. `isCupertino` (`core/platform.dart`)
+  selects `CupertinoApp.router` + Cupertino screens on iOS and leaves the
+  Material tree unchanged on Android. Each screen keeps its two
+  implementations in one file so they stay in sync. The navigation map is
+  **unchanged**: Review is still root, Words / Stats / Settings are still
+  push-navigated from the same top-right cluster — restyled, not moved.
+- **Stock Cupertino only.** Flutter's Cupertino library still models
+  pre-iOS-26 iOS and Liquid Glass is not supported (flutter/flutter#170310);
+  the third-party packages are 0.1.x proof-of-concept quality and need
+  platform views. `CupertinoNavigationBar`, `CupertinoListSection.insetGrouped`
+  and `CupertinoSlidingSegmentedControl` read as native with no new
+  dependencies.
+- **Consequences:**
+  - `core/adaptive.dart` holds what both trees share: colour resolvers,
+    button/progress helpers and `showAdaptiveToast`. The latter is required
+    because `ScaffoldMessenger` does not exist under `CupertinoPageScaffold`,
+    so the old `SnackBar` calls would have thrown on iOS.
+  - Widgets that assert without a `Material` ancestor were replaced:
+    `Material` card shell → `DecoratedBox`, `InkWell` → `GestureDetector`,
+    `Divider` → hairline `Container`, `LinearProgressIndicator` → `_Bar` /
+    `AdaptiveProgressBar`. `showLicensePage` is Material-only, so on iOS it
+    is pushed inside a `Theme` wrapper.
+  - `router.dart` returns `CupertinoPage` on iOS, which is what actually
+    brings the edge-swipe back gesture and the iOS push transition.
+  - Haptics added on swipe commit and card flip — absent before, and a large
+    part of what makes an app feel native on iOS.
+  - `grade_style.dart` gains `GradeColors` plus per-platform glyphs; the
+    hard-coded duplicates of the outcome colours in the word list and stats
+    heatmap now reference it.
+  - **Cost:** two widget trees per screen; any future UI change must be made
+    twice. Accepted deliberately in exchange for each platform feeling native.
+  - Domain, data and controller layers are untouched, as is `swipe_stack.dart`
+    (pure gesture logic, and the one widget test pins its behaviour).

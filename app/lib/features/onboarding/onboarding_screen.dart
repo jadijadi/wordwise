@@ -1,8 +1,12 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/adaptive.dart';
 import '../../core/grade_style.dart';
+import '../../core/platform.dart';
 import '../../core/providers.dart';
 import '../../core/settings.dart';
 import '../../core/word_providers.dart';
@@ -50,6 +54,7 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
   }
 
   Future<void> _grade(Grade g) async {
+    HapticFeedback.mediumImpact();
     final w = _samples[_index];
     if (g == Grade.know) _knownPerBand[w.band] = (_knownPerBand[w.band] ?? 0) + 1;
     setState(() {
@@ -72,23 +77,21 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Scaffold(
-      body: SafeArea(
-        child: switch (_step) {
-          0 => _Intro(onNext: () => setState(() => _step = 1), onSkip: () => _finish(bulk: false)),
-          1 => Column(
+    final body = SafeArea(
+      child: switch (_step) {
+        0 => _Intro(onNext: () => setState(() => _step = 1), onSkip: () => _finish(bulk: false)),
+        1 => Column(
               children: [
                 Padding(
                   padding: const EdgeInsets.all(20),
                   child: Column(
                     children: [
-                      Text('Quick check', style: theme.textTheme.headlineSmall),
+                      const Text('Quick check', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w600)),
                       const SizedBox(height: 4),
                       Text('${_index + 1} of ${_samples.length} · be honest, this only sets your starting point',
-                          style: theme.textTheme.bodySmall, textAlign: TextAlign.center),
+                          style: TextStyle(fontSize: 12, color: adaptiveSecondaryLabel(context)), textAlign: TextAlign.center),
                       const SizedBox(height: 8),
-                      LinearProgressIndicator(value: _index / _samples.length),
+                      AdaptiveProgressBar(value: _index / _samples.length),
                     ],
                   ),
                 ),
@@ -110,11 +113,19 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                     children: [
                       for (final g in [Grade.unknown, Grade.issues, Grade.know]) ...[
                         Expanded(
-                          child: FilledButton.tonal(
-                            onPressed: () => _stack.commit(g),
-                            style: FilledButton.styleFrom(foregroundColor: g.color),
-                            child: Text(g.label),
-                          ),
+                          child: isCupertino
+                              ? CupertinoButton(
+                                  padding: const EdgeInsets.symmetric(vertical: 12),
+                                  borderRadius: BorderRadius.circular(14),
+                                  color: g.color.withValues(alpha: 0.14),
+                                  onPressed: () => _stack.commit(g),
+                                  child: Text(g.label, style: TextStyle(color: g.color, fontSize: 15)),
+                                )
+                              : FilledButton.tonal(
+                                  onPressed: () => _stack.commit(g),
+                                  style: FilledButton.styleFrom(foregroundColor: g.color),
+                                  child: Text(g.label),
+                                ),
                         ),
                         if (g != Grade.know) const SizedBox(width: 8),
                       ],
@@ -123,10 +134,13 @@ class _OnboardingScreenState extends ConsumerState<OnboardingScreen> {
                 ),
               ],
             ),
-          _ => _Summary(upTo: _fullyKnownUpTo, onFinish: _finish),
-        },
-      ),
+        _ => _Summary(upTo: _fullyKnownUpTo, onFinish: _finish),
+      },
     );
+
+    return isCupertino
+        ? CupertinoPageScaffold(backgroundColor: adaptiveBackground(context), child: body)
+        : Scaffold(body: body);
   }
 }
 
@@ -137,33 +151,56 @@ class _Intro extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final secondary = adaptiveSecondaryLabel(context);
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           const Spacer(),
-          Text('Wordwise', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w700)),
+          const Text('Wordwise', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w700)),
           const SizedBox(height: 8),
-          Text('The 40,000 words a fluent reader knows — meaning and pronunciation — one card at a time, most common first.',
-              style: theme.textTheme.bodyLarge),
+          const Text(
+            'The 40,000 words a fluent reader knows — meaning and pronunciation — one card at a time, most common first.',
+            style: TextStyle(fontSize: 16),
+          ),
           const SizedBox(height: 28),
           for (final g in [Grade.know, Grade.issues, Grade.unknown])
-            ListTile(
-              contentPadding: EdgeInsets.zero,
-              leading: CircleAvatar(backgroundColor: g.color.withValues(alpha: 0.15), child: Icon(g.icon, color: g.color)),
-              title: Text('${_dir(g)} — ${g.label}'),
-              subtitle: Text(g.hint),
+            Padding(
+              padding: const EdgeInsets.only(bottom: 14),
+              child: Row(
+                children: [
+                  Container(
+                    width: 40,
+                    height: 40,
+                    alignment: Alignment.center,
+                    decoration: BoxDecoration(color: g.color.withValues(alpha: 0.15), shape: BoxShape.circle),
+                    child: Icon(g.icon, color: g.color, size: 20),
+                  ),
+                  const SizedBox(width: 16),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('${_dir(g)} — ${g.label}', style: const TextStyle(fontSize: 16)),
+                        Text(g.hint, style: TextStyle(fontSize: 13, color: secondary)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
             ),
           const SizedBox(height: 8),
-          Text('Tap a card to see its meaning and hear it. You grade yourself; nobody is checking.', style: theme.textTheme.bodyMedium),
+          Text(
+            'Tap a card to see its meaning and hear it. You grade yourself; nobody is checking.',
+            style: TextStyle(fontSize: 14, color: secondary),
+          ),
           const Spacer(),
           Row(
             children: [
-              TextButton(onPressed: onSkip, child: const Text('Skip check')),
+              adaptiveTextButton(onPressed: onSkip, child: const Text('Skip check')),
               const Spacer(),
-              FilledButton(onPressed: onNext, child: const Text('Start quick check')),
+              adaptiveFilledButton(onPressed: onNext, child: const Text('Start quick check')),
             ],
           ),
         ],
@@ -181,31 +218,34 @@ class _Summary extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return Padding(
       padding: const EdgeInsets.all(24),
       child: Column(
         mainAxisAlignment: MainAxisAlignment.center,
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
-          Icon(Icons.auto_awesome_rounded, size: 56, color: theme.colorScheme.primary),
+          Icon(isCupertino ? CupertinoIcons.sparkles : Icons.auto_awesome_rounded, size: 56, color: adaptiveAccent(context)),
           const SizedBox(height: 16),
-          Text(upTo == 0 ? 'Starting from the top' : 'You knew all of bands 1–$upTo', style: theme.textTheme.headlineSmall, textAlign: TextAlign.center),
+          Text(
+            upTo == 0 ? 'Starting from the top' : 'You knew all of bands 1–$upTo',
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 12),
           Text(
             upTo == 0
                 ? 'You will start at word #1. Swiping "Easy" is fast — the first few hundred will fly by.'
                 : 'Retire words 1–${upTo * 1000} now and start at #${upTo * 1000 + 1}? You can undo this in Settings, and any word can be un-retired from the list.',
-            style: theme.textTheme.bodyLarge,
+            style: const TextStyle(fontSize: 16),
             textAlign: TextAlign.center,
           ),
           const SizedBox(height: 28),
           if (upTo > 0) ...[
-            FilledButton(onPressed: () => onFinish(bulk: true), child: Text('Retire words 1–${upTo * 1000}')),
+            adaptiveFilledButton(onPressed: () => onFinish(bulk: true), child: Text('Retire words 1–${upTo * 1000}')),
             const SizedBox(height: 8),
-            OutlinedButton(onPressed: () => onFinish(bulk: false), child: const Text('No, start from #1')),
+            adaptiveSecondaryButton(onPressed: () => onFinish(bulk: false), child: const Text('No, start from #1')),
           ] else
-            FilledButton(onPressed: () => onFinish(bulk: false), child: const Text('Start')),
+            adaptiveFilledButton(onPressed: () => onFinish(bulk: false), child: const Text('Start')),
         ],
       ),
     );

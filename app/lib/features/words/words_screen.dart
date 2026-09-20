@@ -1,7 +1,11 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/adaptive.dart';
+import '../../core/grade_style.dart';
+import '../../core/platform.dart';
 import '../../core/providers.dart';
 import '../../core/word_providers.dart';
 import '../../domain/models.dart';
@@ -59,14 +63,71 @@ class _WordsScreenState extends ConsumerState<WordsScreen> {
   WordFilter _filter = WordFilter.all;
   String _query = '';
 
+  void _setQuery(String v) => setState(() => _query = v.trim());
+
+  Widget _count(BuildContext context) => Consumer(builder: (context, ref, _) {
+        final n = ref.watch(wordCountProvider(_filter)).value;
+        return Text(
+          n == null ? '' : '$n words',
+          style: TextStyle(fontSize: 13, color: adaptiveSecondaryLabel(context)),
+        );
+      });
+
+  Widget get _list => _query.isEmpty ? _PagedList(filter: _filter) : _SearchList(query: _query);
+
   @override
   Widget build(BuildContext context) {
+    if (isCupertino) {
+      return CupertinoPageScaffold(
+        backgroundColor: adaptiveBackground(context, grouped: true),
+        navigationBar: const CupertinoNavigationBar(middle: Text('Words')),
+        child: SafeArea(
+          bottom: false,
+          child: Column(
+            children: [
+              Padding(
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+                child: CupertinoSearchTextField(
+                  placeholder: 'Search words and forms',
+                  onChanged: _setQuery,
+                ),
+              ),
+              if (_query.isEmpty) ...[
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: SizedBox(
+                    width: double.infinity,
+                    child: CupertinoSlidingSegmentedControl<WordFilter>(
+                      groupValue: _filter,
+                      onValueChanged: (f) => f == null ? null : setState(() => _filter = f),
+                      children: {
+                        for (final f in WordFilter.values)
+                          f: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 5),
+                            child: Text(f.name, style: const TextStyle(fontSize: 13)),
+                          ),
+                      },
+                    ),
+                  ),
+                ),
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
+                  child: Align(alignment: Alignment.centerRight, child: _count(context)),
+                ),
+              ],
+              Expanded(child: _list),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(
         title: TextField(
           decoration: const InputDecoration(hintText: 'Search words and forms', border: InputBorder.none),
           textInputAction: TextInputAction.search,
-          onChanged: (v) => setState(() => _query = v.trim()),
+          onChanged: _setQuery,
         ),
       ),
       body: Column(
@@ -82,14 +143,11 @@ class _WordsScreenState extends ConsumerState<WordsScreen> {
                       child: ChoiceChip(label: Text(f.name), selected: _filter == f, onSelected: (_) => setState(() => _filter = f)),
                     ),
                   const Spacer(),
-                  Consumer(builder: (context, ref, _) {
-                    final n = ref.watch(wordCountProvider(_filter)).value;
-                    return Text(n == null ? '' : '$n words', style: Theme.of(context).textTheme.labelMedium);
-                  }),
+                  _count(context),
                 ],
               ),
             ),
-          Expanded(child: _query.isEmpty ? _PagedList(filter: _filter) : _SearchList(query: _query)),
+          Expanded(child: _list),
         ],
       ),
     );
@@ -140,11 +198,70 @@ class WordRow extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final subtitle = '#${word.rank} · band ${word.band}${word.isProper ? ' · name' : ''}';
+    final ipaStyle = TextStyle(fontSize: 13, color: adaptiveSecondaryLabel(context));
+
+    if (isCupertino) {
+      // Hand-built so the whole row fits the 56pt itemExtent: lemma and its
+      // rank share one column, IPA and chevron sit on the right.
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => context.push('/words/${word.id}'),
+        child: Column(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    ProgressIcon(progress: progress),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            word.lemma,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 17, color: CupertinoColors.label.resolveFrom(context)),
+                          ),
+                          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: ipaStyle),
+                        ],
+                      ),
+                    ),
+                    if (word.ipa != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Text(word.ipa!, maxLines: 1, style: ipaStyle),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Icon(
+                        CupertinoIcons.chevron_forward,
+                        size: 14,
+                        color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 48),
+              child: Container(height: 0.5, color: adaptiveSeparator(context)),
+            ),
+          ],
+        ),
+      );
+    }
+
     return ListTile(
       leading: ProgressIcon(progress: progress),
       title: Text(word.lemma),
-      subtitle: Text('#${word.rank} · band ${word.band}${word.isProper ? ' · name' : ''}'),
-      trailing: word.ipa == null ? null : Text(word.ipa!, style: Theme.of(context).textTheme.bodySmall),
+      subtitle: Text(subtitle),
+      trailing: word.ipa == null ? null : Text(word.ipa!, style: ipaStyle),
       onTap: () => context.push('/words/${word.id}'),
     );
   }
@@ -156,12 +273,14 @@ class ProgressIcon extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     final p = progress;
-    if (p == null) return Icon(Icons.circle_outlined, color: scheme.outlineVariant);
-    if (p.isRetired) return const Icon(Icons.check_circle_rounded, color: Color(0xFF2E9E5B));
-    if (p.isSkipped) return Icon(Icons.fast_forward_rounded, color: scheme.outline);
-    if (p.isDue(DateTime.now())) return const Icon(Icons.schedule_rounded, color: Color(0xFFD64545));
-    return Icon(Icons.timelapse_rounded, color: scheme.primary);
+    final (IconData glyph, Color color) = switch (p) {
+      null => (isCupertino ? CupertinoIcons.circle : Icons.circle_outlined, adaptiveSeparator(context)),
+      _ when p.isRetired => (isCupertino ? CupertinoIcons.check_mark_circled_solid : Icons.check_circle_rounded, GradeColors.know),
+      _ when p.isSkipped => (isCupertino ? CupertinoIcons.forward : Icons.fast_forward_rounded, adaptiveSecondaryLabel(context)),
+      _ when p.isDue(DateTime.now()) => (isCupertino ? CupertinoIcons.clock_fill : Icons.schedule_rounded, GradeColors.unknown),
+      _ => (isCupertino ? CupertinoIcons.time : Icons.timelapse_rounded, adaptiveAccent(context)),
+    };
+    return Icon(glyph, color: color);
   }
 }
