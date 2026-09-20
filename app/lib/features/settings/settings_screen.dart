@@ -201,8 +201,10 @@ class _CupertinoSettings extends StatelessWidget {
                 min: 0.25,
                 max: 0.7,
                 onChanged: notifier.setTtsRate,
+                minIcon: CupertinoIcons.tortoise_fill,
+                maxIcon: CupertinoIcons.hare_fill,
                 trailing: CupertinoButton(
-                  padding: EdgeInsets.zero,
+                  padding: const EdgeInsets.only(left: 12),
                   minimumSize: const Size(0, 0),
                   onPressed: onSpeakSample,
                   child: const Icon(CupertinoIcons.speaker_2_fill, size: 20),

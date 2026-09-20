@@ -342,6 +342,8 @@ class CupertinoSliderRow extends StatelessWidget {
     this.divisions,
     required this.onChanged,
     this.trailing,
+    this.minIcon,
+    this.maxIcon,
   });
 
   final String label;
@@ -353,12 +355,19 @@ class CupertinoSliderRow extends StatelessWidget {
   final ValueChanged<double> onChanged;
   final Widget? trailing;
 
+  /// Optional small glyphs flanking the slider, as iOS uses for
+  /// brightness/volume-style controls.
+  final IconData? minIcon;
+  final IconData? maxIcon;
+
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(16, 10, 16, 6),
+      padding: const EdgeInsets.fromLTRB(16, 11, 16, 11),
       child: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
+        // stretch, so the slider fills the row rather than sitting at its
+        // intrinsic width — CupertinoSlider does not expand on its own.
+        crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
           Row(
             children: [
@@ -366,11 +375,33 @@ class CupertinoSliderRow extends StatelessWidget {
                 child: Text(label, style: TextStyle(fontSize: 17, color: CupertinoColors.label.resolveFrom(context))),
               ),
               if (valueLabel != null)
-                Text(valueLabel!, style: TextStyle(fontSize: 17, color: CupertinoColors.secondaryLabel.resolveFrom(context))),
+                Text(
+                  valueLabel!,
+                  style: TextStyle(fontSize: 17, color: CupertinoColors.secondaryLabel.resolveFrom(context)),
+                ),
               ?trailing,
             ],
           ),
-          CupertinoSlider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged),
+          const SizedBox(height: 6),
+          // iOS pairs a slider with small min/max glyphs on either side.
+          Row(
+            children: [
+              if (minIcon != null) ...[
+                Icon(minIcon, size: 15, color: CupertinoColors.secondaryLabel.resolveFrom(context)),
+                const SizedBox(width: 8),
+              ],
+              Expanded(
+                child: SizedBox(
+                  width: double.infinity,
+                  child: CupertinoSlider(value: value, min: min, max: max, divisions: divisions, onChanged: onChanged),
+                ),
+              ),
+              if (maxIcon != null) ...[
+                const SizedBox(width: 8),
+                Icon(maxIcon, size: 19, color: CupertinoColors.secondaryLabel.resolveFrom(context)),
+              ],
+            ],
+          ),
         ],
       ),
     );
