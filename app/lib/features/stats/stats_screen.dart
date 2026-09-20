@@ -86,12 +86,16 @@ class StatsScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final stats = ref.watch(statsProvider);
     final body = stats.when(
-      loading: () => Center(
-        child: isCupertino ? const CupertinoActivityIndicator() : const CircularProgressIndicator(),
+      loading: () => SizedBox(
+        height: 240,
+        child: Center(child: isCupertino ? const CupertinoActivityIndicator() : const CircularProgressIndicator()),
       ),
-      error: (e, _) => Center(child: Text('$e')),
+      error: (e, _) => SizedBox(height: 240, child: Center(child: Text('$e'))),
       data: (s) => ListView(
-        padding: const EdgeInsets.all(20),
+        // Inside the Cupertino sliver the parent scrolls, so this must not.
+        shrinkWrap: isCupertino,
+        physics: isCupertino ? const NeverScrollableScrollPhysics() : null,
+        padding: const EdgeInsets.fromLTRB(16, 8, 16, 32),
         children: [
           _KnownHero(stats: s),
           const SizedBox(height: 24),
@@ -120,24 +124,28 @@ class StatsScreen extends ConsumerWidget {
             style: TextStyle(fontSize: 14, color: adaptiveSecondaryLabel(context)),
           ),
           const SizedBox(height: 24),
-          const _SectionTitle('Retired per band (1,000 words each)'),
+          const _SectionTitle('Retired per band'),
           const SizedBox(height: 8),
           _BandGrid(perBand: s.retiredPerBand),
+          const SizedBox(height: 8),
+          Text(
+            '1,000 words each.',
+            style: TextStyle(fontSize: 13, color: adaptiveSecondaryLabel(context)),
+          ),
         ],
       ),
     );
 
     if (isCupertino) {
+      // The nav bar is a sliver, so the content must be one too — wrapping a
+      // ListView in SliverFillRemaining clipped the large title.
       return CupertinoPageScaffold(
         backgroundColor: adaptiveBackground(context, grouped: true),
-        child: SafeArea(
-          bottom: false,
-          child: CustomScrollView(
-            slivers: [
-              const CupertinoSliverNavigationBar(largeTitle: Text('Progress')),
-              SliverFillRemaining(hasScrollBody: true, child: body),
-            ],
-          ),
+        child: CustomScrollView(
+          slivers: [
+            const CupertinoSliverNavigationBar(largeTitle: Text('Progress')),
+            SliverSafeArea(top: false, sliver: SliverToBoxAdapter(child: body)),
+          ],
         ),
       );
     }
@@ -154,7 +162,17 @@ class _SectionTitle extends StatelessWidget {
   final String text;
 
   @override
-  Widget build(BuildContext context) => Text(text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600));
+  Widget build(BuildContext context) {
+    if (!isCupertino) return Text(text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600));
+    // Matches the grouped-list headers used elsewhere on iOS.
+    return Padding(
+      padding: const EdgeInsets.only(left: 4),
+      child: Text(
+        text.toUpperCase(),
+        style: TextStyle(fontSize: 13, letterSpacing: -0.08, color: adaptiveSecondaryLabel(context)),
+      ),
+    );
+  }
 }
 
 class _BandGrid extends StatelessWidget {

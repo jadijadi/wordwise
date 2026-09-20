@@ -86,7 +86,7 @@ class _WordsScreenState extends ConsumerState<WordsScreen> {
           child: Column(
             children: [
               Padding(
-                padding: const EdgeInsets.fromLTRB(12, 8, 12, 4),
+                padding: const EdgeInsets.fromLTRB(16, 8, 16, 8),
                 child: CupertinoSearchTextField(
                   placeholder: 'Search words and forms',
                   onChanged: _setQuery,
@@ -94,7 +94,7 @@ class _WordsScreenState extends ConsumerState<WordsScreen> {
               ),
               if (_query.isEmpty) ...[
                 Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: SizedBox(
                     width: double.infinity,
                     child: CupertinoSlidingSegmentedControl<WordFilter>(
@@ -102,13 +102,16 @@ class _WordsScreenState extends ConsumerState<WordsScreen> {
                       onValueChanged: (f) => f == null ? null : setState(() => _filter = f),
                       children: {
                         for (final f in WordFilter.values)
-                          f: Padding(padding: const EdgeInsets.symmetric(vertical: 4), child: Text(f.name)),
+                          f: Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 5),
+                            child: Text(f.name, style: const TextStyle(fontSize: 13)),
+                          ),
                       },
                     ),
                   ),
                 ),
                 Padding(
-                  padding: const EdgeInsets.fromLTRB(16, 2, 16, 6),
+                  padding: const EdgeInsets.fromLTRB(16, 0, 16, 8),
                   child: Align(alignment: Alignment.centerRight, child: _count(context)),
                 ),
               ],
@@ -199,13 +202,58 @@ class WordRow extends StatelessWidget {
     final ipaStyle = TextStyle(fontSize: 13, color: adaptiveSecondaryLabel(context));
 
     if (isCupertino) {
-      return CupertinoListTile.notched(
-        leading: ProgressIcon(progress: progress),
-        title: Text(word.lemma),
-        subtitle: Text(subtitle),
-        additionalInfo: word.ipa == null ? null : Text(word.ipa!, style: ipaStyle),
-        trailing: const CupertinoListTileChevron(),
+      // Hand-built so the whole row fits the 56pt itemExtent: lemma and its
+      // rank share one column, IPA and chevron sit on the right.
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
         onTap: () => context.push('/words/${word.id}'),
+        child: Column(
+          children: [
+            Expanded(
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Row(
+                  children: [
+                    ProgressIcon(progress: progress),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            word.lemma,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: TextStyle(fontSize: 17, color: CupertinoColors.label.resolveFrom(context)),
+                          ),
+                          Text(subtitle, maxLines: 1, overflow: TextOverflow.ellipsis, style: ipaStyle),
+                        ],
+                      ),
+                    ),
+                    if (word.ipa != null)
+                      Padding(
+                        padding: const EdgeInsets.only(left: 8),
+                        child: Text(word.ipa!, maxLines: 1, style: ipaStyle),
+                      ),
+                    Padding(
+                      padding: const EdgeInsets.only(left: 6),
+                      child: Icon(
+                        CupertinoIcons.chevron_forward,
+                        size: 14,
+                        color: CupertinoColors.tertiaryLabel.resolveFrom(context),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+            Padding(
+              padding: const EdgeInsets.only(left: 48),
+              child: Container(height: 0.5, color: adaptiveSeparator(context)),
+            ),
+          ],
+        ),
       );
     }
 

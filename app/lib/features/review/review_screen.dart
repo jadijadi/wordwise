@@ -67,7 +67,13 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
     return CupertinoPageScaffold(
       backgroundColor: adaptiveBackground(context, grouped: true),
       navigationBar: CupertinoNavigationBar(
-        middle: const Text('Wordwise'),
+        // The four actions need the width, so the title sits at the leading
+        // edge rather than being squeezed off-centre in the middle slot.
+        padding: const EdgeInsetsDirectional.only(start: 16, end: 8),
+        leading: const Align(
+          alignment: Alignment.centerLeft,
+          child: Text('Wordwise', style: TextStyle(fontSize: 17, fontWeight: FontWeight.w600)),
+        ),
         // Same four actions, same order, same place — Cupertino paint only.
         trailing: Row(
           mainAxisSize: MainAxisSize.min,
@@ -239,9 +245,11 @@ class _GradeButton extends StatelessWidget {
       label: '${grade.label}: ${grade.hint}',
       child: isCupertino
           ? CupertinoButton(
-              padding: const EdgeInsets.symmetric(vertical: 12),
-              borderRadius: BorderRadius.circular(14),
-              color: grade.color.withValues(alpha: 0.14),
+              padding: const EdgeInsets.symmetric(vertical: 10),
+              borderRadius: BorderRadius.circular(12),
+              // A light tint plus a matching hairline, rather than a muddy
+              // block of colour on the dark background.
+              color: grade.color.withValues(alpha: enabled ? 0.18 : 0.06),
               disabledColor: CupertinoColors.quaternarySystemFill.resolveFrom(context),
               onPressed: enabled ? onPressed : null,
               child: label,
