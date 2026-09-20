@@ -40,11 +40,15 @@ class SettingsScreen extends ConsumerWidget {
     }
 
     Future<void> export() async {
-      final data = await ref.read(progressRepositoryProvider).export();
-      final dir = await getTemporaryDirectory();
-      final file = File(p.join(dir.path, 'wordwise-progress-${DateTime.now().toIso8601String().substring(0, 10)}.json'));
-      await file.writeAsString(const JsonEncoder.withIndent(' ').convert(data));
-      await SharePlus.instance.share(ShareParams(files: [XFile(file.path, mimeType: 'application/json')], subject: 'Wordwise progress'));
+      try {
+        final data = await ref.read(progressRepositoryProvider).export();
+        final dir = await getTemporaryDirectory();
+        final file = File(p.join(dir.path, 'wordwise-progress-${DateTime.now().toIso8601String().substring(0, 10)}.json'));
+        await file.writeAsString(const JsonEncoder.withIndent(' ').convert(data));
+        await SharePlus.instance.share(ShareParams(files: [XFile(file.path, mimeType: 'application/json')], subject: 'Wordwise progress'));
+      } catch (e) {
+        toast('Could not export: $e');
+      }
     }
 
     Future<void> import() async {
@@ -109,7 +113,7 @@ class SettingsScreen extends ConsumerWidget {
           ),
           ListTile(
             title: const Text('Speech rate'),
-            subtitle: Slider(value: settings.ttsRate, min: 0.25, max: 0.7, onChanged: notifier.setTtsRate),
+            subtitle: Slider(value: settings.ttsRate, min: 0.25, max: 0.7, divisions: 9, onChanged: notifier.setTtsRate),
             trailing: IconButton(onPressed: () => ref.read(ttsProvider).speak('ubiquitous'), icon: const Icon(Icons.volume_up_rounded)),
           ),
           ListTile(
@@ -200,6 +204,7 @@ class _CupertinoSettings extends StatelessWidget {
                 value: settings.ttsRate,
                 min: 0.25,
                 max: 0.7,
+                divisions: 9,
                 onChanged: notifier.setTtsRate,
                 minIcon: CupertinoIcons.tortoise_fill,
                 maxIcon: CupertinoIcons.hare_fill,
