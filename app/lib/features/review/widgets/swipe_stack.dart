@@ -1,6 +1,7 @@
 
 import 'package:flutter/material.dart';
 
+import '../../../core/adaptive.dart';
 import '../../../core/grade_style.dart';
 import '../../../domain/models.dart';
 
@@ -199,7 +200,7 @@ class _GradeOverlay extends StatelessWidget {
               decoration: BoxDecoration(
                 border: Border.all(color: color, width: 3),
                 borderRadius: BorderRadius.circular(10),
-                color: Theme.of(context).colorScheme.surface.withValues(alpha: 0.85),
+                color: adaptiveSurface(context).withValues(alpha: 0.85),
               ),
               child: Column(
                 mainAxisSize: MainAxisSize.min,

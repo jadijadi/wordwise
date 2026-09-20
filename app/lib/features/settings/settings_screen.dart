@@ -2,6 +2,7 @@ import 'dart:convert';
 import 'dart:io';
 
 import 'package:file_picker/file_picker.dart';
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -9,6 +10,8 @@ import 'package:path/path.dart' as p;
 import 'package:path_provider/path_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
+import '../../core/adaptive.dart';
+import '../../core/platform.dart';
 import '../../core/providers.dart';
 import '../../core/settings.dart';
 import '../../core/word_providers.dart';
@@ -29,7 +32,7 @@ class SettingsScreen extends ConsumerWidget {
     final notifier = ref.read(settingsProvider.notifier);
     final bulk = ref.watch(lastBulkRetireProvider).value;
 
-    void toast(String msg) => ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text(msg)));
+    void toast(String msg) => showAdaptiveToast(context, msg);
 
     Future<void> afterWrite() async {
       ref.read(progressVersionProvider.notifier).bump();
@@ -65,6 +68,20 @@ class SettingsScreen extends ConsumerWidget {
       final n = await ref.read(progressRepositoryProvider).undoBulkRetire(bulk);
       await afterWrite();
       toast('Un-retired $n words');
+    }
+
+    final undoSubtitle = bulk == null ? null : 'Un-retire the ${(bulk.after['word_ids'] as List).length} words retired at first launch';
+
+    if (isCupertino) {
+      return _CupertinoSettings(
+        settings: settings,
+        notifier: notifier,
+        onSpeakSample: () => ref.read(ttsProvider).speak('ubiquitous'),
+        onExport: export,
+        onImport: import,
+        onUndoCalibration: bulk == null ? null : undoCalibration,
+        undoSubtitle: undoSubtitle,
+      );
     }
 
     return Scaffold(
@@ -114,12 +131,138 @@ class SettingsScreen extends ConsumerWidget {
             ListTile(
               leading: const Icon(Icons.undo_rounded),
               title: const Text('Undo calibration'),
-              subtitle: Text('Un-retire the ${(bulk.after['word_ids'] as List).length} words retired at first launch'),
+              subtitle: Text(undoSubtitle!),
               onTap: undoCalibration,
             ),
           const Divider(),
           ListTile(leading: const Icon(Icons.info_outline_rounded), title: const Text('About & licenses'), onTap: () => context.push('/settings/about')),
         ],
+      ),
+    );
+  }
+}
+
+/// iOS settings: inset-grouped sections, the native switch, sliders and a
+/// segmented control for the theme.
+class _CupertinoSettings extends StatelessWidget {
+  const _CupertinoSettings({
+    required this.settings,
+    required this.notifier,
+    required this.onSpeakSample,
+    required this.onExport,
+    required this.onImport,
+    required this.onUndoCalibration,
+    required this.undoSubtitle,
+  });
+
+  final Settings settings;
+  final SettingsNotifier notifier;
+  final VoidCallback onSpeakSample;
+  final Future<void> Function() onExport;
+  final Future<void> Function() onImport;
+  final Future<void> Function()? onUndoCalibration;
+  final String? undoSubtitle;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoPageScaffold(
+      backgroundColor: adaptiveBackground(context, grouped: true),
+      navigationBar: const CupertinoNavigationBar(middle: Text('Settings')),
+      child: SafeArea(
+        bottom: false,
+        child: ListView(
+          children: [
+            CupertinoListSection.insetGrouped(
+              header: const Text('Reviewing'),
+              children: [
+                CupertinoListTile.notched(
+                  title: const Text('New words per day'),
+                  additionalInfo: Text('${settings.newPerDay}'),
+                  subtitle: CupertinoSlider(
+                    value: settings.newPerDay.toDouble(),
+                    min: 10,
+                    max: 200,
+                    divisions: 19,
+                    onChanged: (v) => notifier.setNewPerDay(v.round()),
+                  ),
+                ),
+                CupertinoListTile.notched(
+                  title: const Text('Show IPA transcription'),
+                  trailing: CupertinoSwitch(value: settings.showIpa, onChanged: notifier.setShowIpa),
+                ),
+                CupertinoListTile.notched(
+                  title: const Text('Skip ahead on streaks'),
+                  subtitle: const Text('10 known in a row jumps over the next 100+ words; they return once you start missing words'),
+                  trailing: CupertinoSwitch(value: settings.skipAhead, onChanged: notifier.setSkipAhead),
+                ),
+                CupertinoListTile.notched(
+                  title: const Text('Speech rate'),
+                  subtitle: CupertinoSlider(value: settings.ttsRate, min: 0.25, max: 0.7, onChanged: notifier.setTtsRate),
+                  trailing: CupertinoButton(
+                    padding: EdgeInsets.zero,
+                    minimumSize: const Size(0, 0),
+                    onPressed: onSpeakSample,
+                    child: const Icon(CupertinoIcons.speaker_2_fill, size: 22),
+                  ),
+                ),
+              ],
+            ),
+            CupertinoListSection.insetGrouped(
+              header: const Text('Appearance'),
+              children: [
+                CupertinoListTile.notched(
+                  title: const Text('Theme'),
+                  trailing: CupertinoSlidingSegmentedControl<ThemeMode>(
+                    groupValue: settings.themeMode,
+                    onValueChanged: (m) => m == null ? null : notifier.setThemeMode(m),
+                    children: const {
+                      ThemeMode.system: Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('Auto')),
+                      ThemeMode.light: Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('Light')),
+                      ThemeMode.dark: Padding(padding: EdgeInsets.symmetric(horizontal: 6), child: Text('Dark')),
+                    },
+                  ),
+                ),
+              ],
+            ),
+            CupertinoListSection.insetGrouped(
+              header: const Text('Progress'),
+              children: [
+                CupertinoListTile.notched(
+                  leading: const Icon(CupertinoIcons.square_arrow_up),
+                  title: const Text('Export progress'),
+                  subtitle: const Text('JSON file via the share sheet'),
+                  trailing: const CupertinoListTileChevron(),
+                  onTap: onExport,
+                ),
+                CupertinoListTile.notched(
+                  leading: const Icon(CupertinoIcons.square_arrow_down),
+                  title: const Text('Import progress'),
+                  subtitle: const Text('Merges by word; newest wins'),
+                  trailing: const CupertinoListTileChevron(),
+                  onTap: onImport,
+                ),
+                if (onUndoCalibration != null)
+                  CupertinoListTile.notched(
+                    leading: const Icon(CupertinoIcons.arrow_uturn_left),
+                    title: const Text('Undo calibration'),
+                    subtitle: Text(undoSubtitle!),
+                    onTap: onUndoCalibration,
+                  ),
+              ],
+            ),
+            CupertinoListSection.insetGrouped(
+              children: [
+                CupertinoListTile.notched(
+                  leading: const Icon(CupertinoIcons.info_circle),
+                  title: const Text('About & licenses'),
+                  trailing: const CupertinoListTileChevron(),
+                  onTap: () => context.push('/settings/about'),
+                ),
+              ],
+            ),
+            const SizedBox(height: 24),
+          ],
+        ),
       ),
     );
   }

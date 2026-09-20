@@ -1,8 +1,12 @@
 import 'dart:math' as math;
 
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../../core/adaptive.dart';
+import '../../../core/platform.dart';
 import '../../../core/providers.dart';
 import '../../../core/settings.dart';
 import '../../../core/word_providers.dart';
@@ -41,6 +45,7 @@ class _WordCardState extends ConsumerState<WordCard> with SingleTickerProviderSt
   void _toggle() {
     if (!widget.interactive) return;
     if (_flip.isAnimating) return;
+    HapticFeedback.selectionClick();
     _flip.value < 0.5 ? _flip.forward() : _flip.reverse();
   }
 
@@ -79,15 +84,18 @@ class _Shell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
+    // A plain decorated box rather than Material(), so the card renders the
+    // same under CupertinoApp, where there is no Material ancestor to inherit.
     return Semantics(
       label: semantics,
-      child: Material(
-        elevation: 6,
-        shadowColor: Colors.black38,
-        color: scheme.surface,
-        borderRadius: BorderRadius.circular(24),
+      child: Container(
         clipBehavior: Clip.antiAlias,
+        decoration: BoxDecoration(
+          color: adaptiveSurface(context),
+          borderRadius: BorderRadius.circular(24),
+          border: isCupertino ? Border.all(color: adaptiveSeparator(context), width: 0.5) : null,
+          boxShadow: const [BoxShadow(color: Color(0x33000000), blurRadius: 18, offset: Offset(0, 6))],
+        ),
         child: child,
       ),
     );
@@ -101,7 +109,6 @@ class _Front extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     return _Shell(
       semantics: 'Word ${word.lemma}. Tap to reveal meaning.',
       child: Padding(
@@ -124,12 +131,12 @@ class _Front extends StatelessWidget {
                   fit: BoxFit.scaleDown,
                   child: Text(
                     word.lemma,
-                    style: theme.textTheme.displayMedium?.copyWith(fontWeight: FontWeight.w600),
+                    style: const TextStyle(fontSize: 44, fontWeight: FontWeight.w600),
                   ),
                 ),
               ),
             ),
-            Text('tap to reveal', style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.outline)),
+            Text('tap to reveal', style: TextStyle(fontSize: 12, color: adaptiveSecondaryLabel(context))),
           ],
         ),
       ),
@@ -143,10 +150,11 @@ class _Back extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final detail = ref.watch(wordDetailProvider(word.id));
     final showIpa = ref.watch(settingsProvider).value?.showIpa ?? true;
     final tts = ref.watch(ttsProvider);
+    final secondary = adaptiveSecondaryLabel(context);
+    final footnote = TextStyle(fontSize: 12, color: secondary);
     return _Shell(
       semantics: 'Meaning of ${word.lemma}',
       child: Padding(
@@ -156,23 +164,23 @@ class _Back extends ConsumerWidget {
           children: [
             Row(
               children: [
-                Expanded(child: Text(word.lemma, style: theme.textTheme.headlineMedium?.copyWith(fontWeight: FontWeight.w600))),
-                IconButton.filledTonal(
-                  tooltip: 'Pronounce',
-                  onPressed: () => tts.speak(word.lemma),
-                  icon: const Icon(Icons.volume_up_rounded),
-                ),
+                Expanded(child: Text(word.lemma, style: const TextStyle(fontSize: 28, fontWeight: FontWeight.w600))),
+                _SpeakerButton(onPressed: () => tts.speak(word.lemma)),
               ],
             ),
             if (showIpa && word.ipa != null)
-              InkWell(
+              GestureDetector(
+                behavior: HitTestBehavior.opaque,
                 onTap: () => tts.speak(word.lemma),
                 child: Padding(
                   padding: const EdgeInsets.symmetric(vertical: 4),
-                  child: Text(word.ipa!, style: theme.textTheme.titleMedium?.copyWith(color: theme.colorScheme.primary)),
+                  child: Text(word.ipa!, style: TextStyle(fontSize: 16, color: adaptiveAccent(context))),
                 ),
               ),
-            const Divider(),
+            Padding(
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              child: Container(height: 0.5, color: adaptiveSeparator(context)),
+            ),
             Expanded(
               child: ListView(
                 padding: EdgeInsets.zero,
@@ -180,20 +188,48 @@ class _Back extends ConsumerWidget {
                   for (final s in detail.senses) _SenseTile(sense: s),
                   if (detail.forms.isNotEmpty) ...[
                     const SizedBox(height: 8),
-                    Text('Forms: ${detail.forms.join(', ')}', style: theme.textTheme.bodySmall?.copyWith(color: theme.colorScheme.outline)),
+                    Text('Forms: ${detail.forms.join(', ')}', style: footnote),
                   ],
                 ],
               ),
             ),
             Row(
               children: [
-                Text('#${word.rank}', style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.outline)),
+                Text('#${word.rank}', style: footnote),
                 const Spacer(),
-                Text(word.pos.join(' · '), style: theme.textTheme.labelMedium?.copyWith(color: theme.colorScheme.outline)),
+                Text(word.pos.join(' · '), style: footnote),
               ],
             ),
           ],
         ),
+      ),
+    );
+  }
+}
+
+class _SpeakerButton extends StatelessWidget {
+  const _SpeakerButton({required this.onPressed});
+  final VoidCallback onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    if (!isCupertino) {
+      return IconButton.filledTonal(
+        tooltip: 'Pronounce',
+        onPressed: onPressed,
+        icon: const Icon(Icons.volume_up_rounded),
+      );
+    }
+    return Semantics(
+      button: true,
+      label: 'Pronounce',
+      child: CupertinoButton(
+        padding: const EdgeInsets.all(8),
+        minimumSize: const Size(0, 0),
+        borderRadius: BorderRadius.circular(20),
+        color: adaptiveChipBackground(context),
+        onPressed: onPressed,
+        child: Icon(CupertinoIcons.speaker_2_fill, size: 20, color: adaptiveAccent(context)),
       ),
     );
   }
@@ -205,25 +241,31 @@ class _SenseTile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
+    final body = DefaultTextStyle.of(context).style.copyWith(fontSize: 16);
     return Padding(
       padding: const EdgeInsets.only(bottom: 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          RichText(
-            text: TextSpan(
-              style: theme.textTheme.bodyLarge,
+          Text.rich(
+            TextSpan(
               children: [
-                TextSpan(text: '${posLabel(sense.pos)} ', style: TextStyle(color: theme.colorScheme.primary, fontStyle: FontStyle.italic)),
+                TextSpan(
+                  text: '${posLabel(sense.pos)} ',
+                  style: TextStyle(color: adaptiveAccent(context), fontStyle: FontStyle.italic),
+                ),
                 TextSpan(text: sense.gloss),
               ],
             ),
+            style: body,
           ),
           if (sense.example != null)
             Padding(
               padding: const EdgeInsets.only(top: 2),
-              child: Text('“${sense.example}”', style: theme.textTheme.bodyMedium?.copyWith(fontStyle: FontStyle.italic, color: theme.colorScheme.onSurfaceVariant)),
+              child: Text(
+                '“${sense.example}”',
+                style: body.copyWith(fontSize: 14, fontStyle: FontStyle.italic, color: adaptiveSecondaryLabel(context)),
+              ),
             ),
         ],
       ),
@@ -252,11 +294,16 @@ class _Chip extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final scheme = Theme.of(context).colorScheme;
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-      decoration: BoxDecoration(color: scheme.secondaryContainer, borderRadius: BorderRadius.circular(12)),
-      child: Text(text, style: Theme.of(context).textTheme.labelSmall?.copyWith(color: scheme.onSecondaryContainer)),
+      decoration: BoxDecoration(color: adaptiveChipBackground(context), borderRadius: BorderRadius.circular(12)),
+      child: Text(
+        text,
+        style: TextStyle(
+          fontSize: 11,
+          color: isCupertino ? CupertinoColors.label.resolveFrom(context) : Theme.of(context).colorScheme.onSecondaryContainer,
+        ),
+      ),
     );
   }
 }

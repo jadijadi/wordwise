@@ -1,7 +1,10 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/adaptive.dart';
 import '../../core/grade_style.dart';
+import '../../core/platform.dart';
 import '../../core/providers.dart';
 import '../../core/word_providers.dart';
 import '../../domain/models.dart';
@@ -81,67 +84,108 @@ class StatsScreen extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final theme = Theme.of(context);
     final stats = ref.watch(statsProvider);
+    final body = stats.when(
+      loading: () => Center(
+        child: isCupertino ? const CupertinoActivityIndicator() : const CircularProgressIndicator(),
+      ),
+      error: (e, _) => Center(child: Text('$e')),
+      data: (s) => ListView(
+        padding: const EdgeInsets.all(20),
+        children: [
+          _KnownHero(stats: s),
+          const SizedBox(height: 24),
+          const _SectionTitle('Today'),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              for (final g in [Grade.know, Grade.issues, Grade.unknown])
+                Expanded(child: _Tile(label: g.label, value: '${s.today[g]}', color: g.color)),
+            ],
+          ),
+          const SizedBox(height: 24),
+          const _SectionTitle('Totals'),
+          const SizedBox(height: 8),
+          Row(
+            children: [
+              Expanded(child: _Tile(label: 'retired', value: '${s.retired}')),
+              Expanded(child: _Tile(label: 'learning', value: '${s.learning}')),
+              Expanded(child: _Tile(label: 'due now', value: '${s.dueNow}')),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            'Highest band touched: ${s.highestBand} of ${s.retiredPerBand.length}'
+            '${s.skipped > 0 ? ' · ${s.skipped} words skipped ahead, to be checked later' : ''}',
+            style: TextStyle(fontSize: 14, color: adaptiveSecondaryLabel(context)),
+          ),
+          const SizedBox(height: 24),
+          const _SectionTitle('Retired per band (1,000 words each)'),
+          const SizedBox(height: 8),
+          _BandGrid(perBand: s.retiredPerBand),
+        ],
+      ),
+    );
+
+    if (isCupertino) {
+      return CupertinoPageScaffold(
+        backgroundColor: adaptiveBackground(context, grouped: true),
+        child: SafeArea(
+          bottom: false,
+          child: CustomScrollView(
+            slivers: [
+              const CupertinoSliverNavigationBar(largeTitle: Text('Progress')),
+              SliverFillRemaining(hasScrollBody: true, child: body),
+            ],
+          ),
+        ),
+      );
+    }
+
     return Scaffold(
       appBar: AppBar(title: const Text('Progress')),
-      body: stats.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('$e')),
-        data: (s) => ListView(
-          padding: const EdgeInsets.all(20),
-          children: [
-            _KnownHero(stats: s),
-            const SizedBox(height: 24),
-            Text('Today', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                for (final g in [Grade.know, Grade.issues, Grade.unknown])
-                  Expanded(child: _Tile(label: g.label, value: '${s.today[g]}', color: g.color)),
-              ],
+      body: body,
+    );
+  }
+}
+
+class _SectionTitle extends StatelessWidget {
+  const _SectionTitle(this.text);
+  final String text;
+
+  @override
+  Widget build(BuildContext context) => Text(text, style: const TextStyle(fontSize: 17, fontWeight: FontWeight.w600));
+}
+
+class _BandGrid extends StatelessWidget {
+  const _BandGrid({required this.perBand});
+  final List<int> perBand;
+
+  @override
+  Widget build(BuildContext context) {
+    final empty = isCupertino
+        ? CupertinoColors.tertiarySystemFill.resolveFrom(context)
+        : Theme.of(context).colorScheme.surfaceContainerHighest;
+    return GridView.count(
+      crossAxisCount: 8,
+      shrinkWrap: true,
+      physics: const NeverScrollableScrollPhysics(),
+      mainAxisSpacing: 4,
+      crossAxisSpacing: 4,
+      children: [
+        for (var i = 0; i < perBand.length; i++)
+          Semantics(
+            label: 'Band ${i + 1}: ${perBand[i]} retired',
+            child: Container(
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                borderRadius: BorderRadius.circular(6),
+                color: Color.lerp(empty, GradeColors.know, perBand[i] / 1000),
+              ),
+              child: Text('${i + 1}', style: const TextStyle(fontSize: 11)),
             ),
-            const SizedBox(height: 24),
-            Text('Totals', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(child: _Tile(label: 'retired', value: '${s.retired}')),
-                Expanded(child: _Tile(label: 'learning', value: '${s.learning}')),
-                Expanded(child: _Tile(label: 'due now', value: '${s.dueNow}')),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text('Highest band touched: ${s.highestBand} of ${s.retiredPerBand.length}'
-                '${s.skipped > 0 ? ' · ${s.skipped} words skipped ahead, to be checked later' : ''}',
-                style: theme.textTheme.bodyMedium),
-            const SizedBox(height: 24),
-            Text('Retired per band (1,000 words each)', style: theme.textTheme.titleMedium),
-            const SizedBox(height: 8),
-            GridView.count(
-              crossAxisCount: 8,
-              shrinkWrap: true,
-              physics: const NeverScrollableScrollPhysics(),
-              mainAxisSpacing: 4,
-              crossAxisSpacing: 4,
-              children: [
-                for (var i = 0; i < s.retiredPerBand.length; i++)
-                  Tooltip(
-                    message: 'Band ${i + 1}: ${s.retiredPerBand[i]} retired',
-                    child: Container(
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        borderRadius: BorderRadius.circular(6),
-                        color: Color.lerp(theme.colorScheme.surfaceContainerHighest, const Color(0xFF2E9E5B), s.retiredPerBand[i] / 1000),
-                      ),
-                      child: Text('${i + 1}', style: theme.textTheme.labelSmall),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
+          ),
+      ],
     );
   }
 }
@@ -153,47 +197,71 @@ class _KnownHero extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    final scheme = theme.colorScheme;
     final pct = stats.knownFraction * 100;
     final pctText = pct >= 10 ? pct.toStringAsFixed(0) : pct.toStringAsFixed(1);
-    return Card(
-      color: scheme.primaryContainer,
-      margin: EdgeInsets.zero,
-      child: Padding(
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.baseline,
-              textBaseline: TextBaseline.alphabetic,
-              children: [
-                Text('$pctText %', style: theme.textTheme.displaySmall?.copyWith(fontWeight: FontWeight.w800, color: scheme.onPrimaryContainer)),
-                const SizedBox(width: 10),
-                Expanded(
-                  child: Text('of ${_thousands(stats.totalWords)} words known\n${_thousands(stats.retired)} retired',
-                      style: theme.textTheme.bodyMedium?.copyWith(color: scheme.onPrimaryContainer)),
+    final accent = adaptiveAccent(context);
+    // On iOS the hero is a tinted rounded panel; on Android it stays a filled
+    // primary-container Card.
+    final onPanel = isCupertino ? CupertinoColors.label.resolveFrom(context) : Theme.of(context).colorScheme.onPrimaryContainer;
+    final panel = isCupertino ? accent.withValues(alpha: 0.12) : Theme.of(context).colorScheme.primaryContainer;
+
+    return Container(
+      decoration: BoxDecoration(color: panel, borderRadius: BorderRadius.circular(16)),
+      padding: const EdgeInsets.fromLTRB(20, 18, 20, 18),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.baseline,
+            textBaseline: TextBaseline.alphabetic,
+            children: [
+              Text('$pctText %', style: TextStyle(fontSize: 34, fontWeight: FontWeight.w800, color: onPanel)),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Text(
+                  'of ${_thousands(stats.totalWords)} words known\n${_thousands(stats.retired)} retired',
+                  style: TextStyle(fontSize: 14, color: onPanel),
                 ),
-              ],
-            ),
-            const SizedBox(height: 12),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(6),
-              child: LinearProgressIndicator(value: stats.knownFraction, minHeight: 8, backgroundColor: scheme.onPrimaryContainer.withValues(alpha: 0.12)),
-            ),
-            const SizedBox(height: 12),
-            Text(
-              '≈ ${(stats.textCoverage * 100).toStringAsFixed(0)} % of everyday English text is made of words you know',
-              style: theme.textTheme.bodySmall?.copyWith(color: scheme.onPrimaryContainer),
-            ),
-          ],
-        ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          _Bar(value: stats.knownFraction, fill: isCupertino ? accent : onPanel, track: onPanel.withValues(alpha: 0.12)),
+          const SizedBox(height: 12),
+          Text(
+            '≈ ${(stats.textCoverage * 100).toStringAsFixed(0)} % of everyday English text is made of words you know',
+            style: TextStyle(fontSize: 12, color: onPanel),
+          ),
+        ],
       ),
     );
   }
 
   static String _thousands(int n) => n.toString().replaceAllMapped(RegExp(r'(\d)(?=(\d{3})+$)'), (m) => '${m[1]},');
+}
+
+/// A plain rounded progress bar; LinearProgressIndicator needs Material.
+class _Bar extends StatelessWidget {
+  const _Bar({required this.value, required this.fill, required this.track});
+  final double value;
+  final Color fill;
+  final Color track;
+
+  @override
+  Widget build(BuildContext context) {
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(6),
+      child: SizedBox(
+        height: 8,
+        child: Stack(
+          children: [
+            Container(color: track),
+            FractionallySizedBox(widthFactor: value.clamp(0.0, 1.0), child: Container(color: fill)),
+          ],
+        ),
+      ),
+    );
+  }
 }
 
 class _Tile extends StatelessWidget {
@@ -204,18 +272,26 @@ class _Tile extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    return Card(
-      margin: const EdgeInsets.all(4),
-      child: Padding(
-        padding: const EdgeInsets.symmetric(vertical: 12),
-        child: Column(
-          children: [
-            Text(value, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700, color: color)),
-            Text(label, style: theme.textTheme.labelSmall),
-          ],
-        ),
+    final content = Padding(
+      padding: const EdgeInsets.symmetric(vertical: 12),
+      child: Column(
+        children: [
+          Text(value, style: TextStyle(fontSize: 22, fontWeight: FontWeight.w700, color: color)),
+          Text(label, style: TextStyle(fontSize: 11, color: adaptiveSecondaryLabel(context))),
+        ],
       ),
+    );
+
+    if (!isCupertino) return Card(margin: const EdgeInsets.all(4), child: content);
+
+    return Container(
+      margin: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        color: adaptiveSurface(context),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: adaptiveSeparator(context), width: 0.5),
+      ),
+      child: content,
     );
   }
 }

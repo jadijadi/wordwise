@@ -1,8 +1,12 @@
+import 'package:flutter/cupertino.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/adaptive.dart';
 import '../../core/grade_style.dart';
+import '../../core/platform.dart';
 import '../../domain/models.dart';
 import '../../domain/queue_policy.dart';
 import 'review_controller.dart';
@@ -23,81 +27,138 @@ class _ReviewScreenState extends ConsumerState<ReviewScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(reviewControllerProvider);
     final ctrl = ref.read(reviewControllerProvider.notifier);
-    final theme = Theme.of(context);
 
     ref.listen(reviewControllerProvider, (prev, next) {
       final skip = next.value?.lastSkip;
       if (skip != null && skip != prev?.value?.lastSkip) {
-        ScaffoldMessenger.of(context)
-          ..clearSnackBars()
-          ..showSnackBar(SnackBar(
-            content: Text('10 in a row — skipped ${skip.$1} words ahead to #${skip.$2}. They come back later if needed.'),
-            duration: const Duration(seconds: 4),
-            behavior: SnackBarBehavior.floating,
-            margin: const EdgeInsets.fromLTRB(20, 0, 20, 96), // above the grade buttons
-          ));
+        showAdaptiveToast(
+          context,
+          '10 in a row — skipped ${skip.$1} words ahead to #${skip.$2}. They come back later if needed.',
+          duration: const Duration(seconds: 4),
+        );
       }
     });
 
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Wordwise'),
-        actions: [
-          IconButton(
-            tooltip: 'Undo last swipe',
-            onPressed: state.value?.canUndo == true ? ctrl.undo : null,
-            icon: const Icon(Icons.undo_rounded),
-          ),
-          IconButton(tooltip: 'Words', onPressed: () => context.push('/words'), icon: const Icon(Icons.list_alt_rounded)),
-          IconButton(tooltip: 'Stats', onPressed: () => context.push('/stats'), icon: const Icon(Icons.insights_rounded)),
-          IconButton(tooltip: 'Settings', onPressed: () => context.push('/settings'), icon: const Icon(Icons.settings_rounded)),
-        ],
+    final canUndo = state.value?.canUndo == true;
+    final body = state.when(
+      loading: () => Center(
+        child: isCupertino ? const CupertinoActivityIndicator() : const CircularProgressIndicator(),
       ),
-      body: state.when(
-        loading: () => const Center(child: CircularProgressIndicator()),
-        error: (e, _) => Center(child: Text('Something went wrong:\n$e', textAlign: TextAlign.center)),
-        data: (s) => Column(
+      error: (e, _) => Center(child: Text('Something went wrong:\n$e', textAlign: TextAlign.center)),
+      data: (s) => _Body(state: s, stack: _stack, onContinue: ctrl.continuePastCap, onSwipe: ctrl.swipe),
+    );
+
+    if (!isCupertino) {
+      return Scaffold(
+        backgroundColor: adaptiveBackground(context, grouped: true),
+        appBar: AppBar(
+          title: const Text('Wordwise'),
+          actions: [
+            IconButton(tooltip: 'Undo last swipe', onPressed: canUndo ? ctrl.undo : null, icon: const Icon(Icons.undo_rounded)),
+            IconButton(tooltip: 'Words', onPressed: () => context.push('/words'), icon: const Icon(Icons.list_alt_rounded)),
+            IconButton(tooltip: 'Stats', onPressed: () => context.push('/stats'), icon: const Icon(Icons.insights_rounded)),
+            IconButton(tooltip: 'Settings', onPressed: () => context.push('/settings'), icon: const Icon(Icons.settings_rounded)),
+          ],
+        ),
+        body: body,
+      );
+    }
+
+    return CupertinoPageScaffold(
+      backgroundColor: adaptiveBackground(context, grouped: true),
+      navigationBar: CupertinoNavigationBar(
+        middle: const Text('Wordwise'),
+        // Same four actions, same order, same place — Cupertino paint only.
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
           children: [
-            _Header(state: s),
-            Expanded(
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
-                child: s.current == null
-                    ? _Empty(state: s, onContinue: ctrl.continuePastCap)
-                    : SwipeStack(
-                        key: _stack,
-                        itemKey: s.current!.word.id,
-                        current: WordCard(
-                          key: ValueKey('card-${s.current!.word.id}'),
-                          word: s.current!.word,
-                          tag: _tag(s.current!),
-                          onLongPress: () => context.push('/words/${s.current!.word.id}'),
-                        ),
-                        next: s.next == null ? null : WordCard(key: ValueKey('card-${s.next!.word.id}'), word: s.next!.word, tag: _tag(s.next!), interactive: false),
-                        onSwipe: ctrl.swipe,
-                      ),
-              ),
-            ),
-            SafeArea(
-              top: false,
-              child: Padding(
-                padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
-                child: Row(
-                  children: [
-                    for (final g in [Grade.unknown, Grade.issues, Grade.know]) ...[
-                      Expanded(
-                        child: _GradeButton(grade: g, enabled: s.current != null, onPressed: () => _stack.commit(g)),
-                      ),
-                      if (g != Grade.know) const SizedBox(width: 12),
-                    ],
-                  ],
-                ),
-              ),
-            ),
+            _BarButton(icon: CupertinoIcons.arrow_uturn_left, semantics: 'Undo last swipe', onPressed: canUndo ? ctrl.undo : null),
+            _BarButton(icon: CupertinoIcons.list_bullet, semantics: 'Words', onPressed: () => context.push('/words')),
+            _BarButton(icon: CupertinoIcons.chart_bar, semantics: 'Stats', onPressed: () => context.push('/stats')),
+            _BarButton(icon: CupertinoIcons.gear, semantics: 'Settings', onPressed: () => context.push('/settings')),
           ],
         ),
       ),
-      backgroundColor: theme.colorScheme.surfaceContainerLowest,
+      child: SafeArea(bottom: false, child: body),
+    );
+  }
+}
+
+/// A compact icon button for the Cupertino nav bar.
+class _BarButton extends StatelessWidget {
+  const _BarButton({required this.icon, required this.semantics, required this.onPressed});
+  final IconData icon;
+  final String semantics;
+  final VoidCallback? onPressed;
+
+  @override
+  Widget build(BuildContext context) {
+    return CupertinoButton(
+      padding: const EdgeInsets.symmetric(horizontal: 6),
+      minimumSize: const Size(0, 0),
+      onPressed: onPressed,
+      child: Semantics(button: true, label: semantics, child: Icon(icon, size: 22)),
+    );
+  }
+}
+
+class _Body extends StatelessWidget {
+  const _Body({required this.state, required this.stack, required this.onContinue, required this.onSwipe});
+  final ReviewState state;
+  final SwipeStackKey stack;
+  final Future<void> Function() onContinue;
+  final Future<void> Function(Grade grade) onSwipe;
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      children: [
+        _Header(state: state),
+        Expanded(
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 8, 20, 8),
+            child: state.current == null
+                ? _Empty(state: state, onContinue: onContinue)
+                : SwipeStack(
+                    key: stack,
+                    itemKey: state.current!.word.id,
+                    current: WordCard(
+                      key: ValueKey('card-${state.current!.word.id}'),
+                      word: state.current!.word,
+                      tag: _tag(state.current!),
+                      onLongPress: () => context.push('/words/${state.current!.word.id}'),
+                    ),
+                    next: state.next == null
+                        ? null
+                        : WordCard(key: ValueKey('card-${state.next!.word.id}'), word: state.next!.word, tag: _tag(state.next!), interactive: false),
+                    onSwipe: (grade) async {
+                      HapticFeedback.mediumImpact();
+                      await onSwipe(grade);
+                    },
+                  ),
+          ),
+        ),
+        SafeArea(
+          top: false,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(20, 4, 20, 12),
+            child: Row(
+              children: [
+                for (final g in [Grade.unknown, Grade.issues, Grade.know]) ...[
+                  Expanded(
+                    child: _GradeButton(
+                      grade: g,
+                      enabled: state.current != null,
+                      onPressed: () => stack.commit(g),
+                    ),
+                  ),
+                  if (g != Grade.know) const SizedBox(width: 12),
+                ],
+              ],
+            ),
+          ),
+        ),
+      ],
     );
   }
 }
@@ -115,13 +176,21 @@ class _Header extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
-    Widget stat(String label, int n) => Column(
+    final secondary = adaptiveSecondaryLabel(context);
+    final numberStyle = TextStyle(
+      fontSize: 22,
+      fontWeight: FontWeight.w700,
+      color: isCupertino ? CupertinoColors.label.resolveFrom(context) : Theme.of(context).colorScheme.onSurface,
+    );
+    final labelStyle = TextStyle(fontSize: 11, color: secondary);
+
+    Widget stat(String label, int n, {Color? color}) => Column(
           children: [
-            Text('$n', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700)),
-            Text(label, style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline)),
+            Text('$n', style: color == null ? numberStyle : numberStyle.copyWith(color: color)),
+            Text(label, style: labelStyle),
           ],
         );
+
     return Padding(
       padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 8),
       child: Row(
@@ -132,8 +201,11 @@ class _Header extends StatelessWidget {
           stat('due', state.dueNow),
           Column(
             children: [
-              Text('${state.streak.clamp(0, 10)}/10', style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, color: state.streak > 0 ? Grade.know.color : null)),
-              Text('streak', style: theme.textTheme.labelSmall?.copyWith(color: theme.colorScheme.outline)),
+              Text(
+                '${state.streak.clamp(0, 10)}/10',
+                style: state.streak > 0 ? numberStyle.copyWith(color: Grade.know.color) : numberStyle,
+              ),
+              Text('streak', style: labelStyle),
             ],
           ),
         ],
@@ -150,24 +222,35 @@ class _GradeButton extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final label = Column(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(grade.icon, color: enabled ? grade.color : adaptiveSecondaryLabel(context), size: 22),
+        const SizedBox(height: 2),
+        Text(
+          grade.label,
+          style: TextStyle(fontSize: 12, color: enabled ? grade.color : adaptiveSecondaryLabel(context)),
+        ),
+      ],
+    );
+
     return Semantics(
       button: true,
       label: '${grade.label}: ${grade.hint}',
-      child: FilledButton.tonal(
-        onPressed: enabled ? onPressed : null,
-        style: FilledButton.styleFrom(
-          foregroundColor: grade.color,
-          padding: const EdgeInsets.symmetric(vertical: 12),
-        ),
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(grade.icon),
-            const SizedBox(height: 2),
-            Text(grade.label, style: const TextStyle(fontSize: 12)),
-          ],
-        ),
-      ),
+      child: isCupertino
+          ? CupertinoButton(
+              padding: const EdgeInsets.symmetric(vertical: 12),
+              borderRadius: BorderRadius.circular(14),
+              color: grade.color.withValues(alpha: 0.14),
+              disabledColor: CupertinoColors.quaternarySystemFill.resolveFrom(context),
+              onPressed: enabled ? onPressed : null,
+              child: label,
+            )
+          : FilledButton.tonal(
+              onPressed: enabled ? onPressed : null,
+              style: FilledButton.styleFrom(foregroundColor: grade.color, padding: const EdgeInsets.symmetric(vertical: 12)),
+              child: label,
+            ),
     );
   }
 }
@@ -179,27 +262,38 @@ class _Empty extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final theme = Theme.of(context);
     final (title, body, action) = state.exhausted
         ? ('All 40,000 words seen', 'Every word is either retired or scheduled. Come back when reviews are due.', null)
         : state.newCapReached
             ? ('Daily goal reached', "You've met today's new-word goal and nothing is due. Keep going anyway?", 'Keep going')
             : ('Nothing to review', 'Come back later for due words.', null);
+
+    final accent = adaptiveAccent(context);
     return Center(
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Icon(Icons.celebration_rounded, size: 56, color: theme.colorScheme.primary),
+          Icon(isCupertino ? CupertinoIcons.sparkles : Icons.celebration_rounded, size: 56, color: accent),
           const SizedBox(height: 16),
-          Text(title, style: theme.textTheme.headlineSmall, textAlign: TextAlign.center),
+          Text(
+            title,
+            style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w600),
+            textAlign: TextAlign.center,
+          ),
           const SizedBox(height: 8),
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 24),
-            child: Text(body, style: theme.textTheme.bodyMedium, textAlign: TextAlign.center),
+            child: Text(
+              body,
+              style: TextStyle(fontSize: 14, color: adaptiveSecondaryLabel(context)),
+              textAlign: TextAlign.center,
+            ),
           ),
           if (action != null) ...[
             const SizedBox(height: 20),
-            FilledButton(onPressed: onContinue, child: Text(action)),
+            isCupertino
+                ? CupertinoButton.filled(onPressed: onContinue, child: Text(action))
+                : FilledButton(onPressed: onContinue, child: Text(action)),
           ],
         ],
       ),
